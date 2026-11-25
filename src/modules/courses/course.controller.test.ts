@@ -123,6 +123,25 @@ describe("CourseController", () => {
             expect(status).toHaveBeenCalledWith(200);
             expect(json).toHaveBeenCalledWith(fakeCourse);
         });
+
+        it("appelle getCourseById avec un UUID transmis sous forme de string sans conversion numérique", async () => {
+            const uuid = "550e8400-e29b-41d4-a716-446655440000";
+            const fakeCourse = { id: 42, uuid, title: "Cours UUID" };
+            mockCourseService.getCourseById.mockResolvedValue(fakeCourse);
+
+            const request = {
+                params: { id: uuid },
+                auth: { userId: 5, sessionId: "sess-1", role: "LEARNER" }
+            } as unknown as Request;
+            const { response, status, json } = createResponse();
+            const next = vi.fn();
+
+            await controller.getCourseById(request, response, next);
+
+            expect(mockCourseService.getCourseById).toHaveBeenCalledWith(uuid, request.auth);
+            expect(status).toHaveBeenCalledWith(200);
+            expect(json).toHaveBeenCalledWith(fakeCourse);
+        });
     });
 
     describe("updateCourse", () => {
@@ -231,6 +250,30 @@ describe("CourseController", () => {
 
             expect(mockCourseService.addLesson).toHaveBeenCalledWith(
                 101,
+                request.body,
+                request.auth
+            );
+            expect(status).toHaveBeenCalledWith(201);
+            expect(json).toHaveBeenCalledWith(createdLesson);
+        });
+
+        it("appelle addLesson avec un moduleId sous forme d'UUID sans conversion numérique", async () => {
+            const moduleUuid = "550e8400-e29b-41d4-a716-446655440000";
+            const createdLesson = { id: 201, moduleId: 101, title: "Leçon 1" };
+            mockCourseService.addLesson.mockResolvedValue(createdLesson);
+
+            const request = {
+                params: { moduleId: moduleUuid },
+                body: { title: "Leçon 1", content: "Contenu de la leçon" },
+                auth: { userId: 10, sessionId: "sess-1", role: "TEACHER" }
+            } as unknown as Request;
+            const { response, status, json } = createResponse();
+            const next = vi.fn();
+
+            await controller.addLesson(request, response, next);
+
+            expect(mockCourseService.addLesson).toHaveBeenCalledWith(
+                moduleUuid,
                 request.body,
                 request.auth
             );

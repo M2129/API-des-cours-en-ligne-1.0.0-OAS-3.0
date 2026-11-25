@@ -1,5 +1,6 @@
 import { LoginLog } from "../modules/auth/login-log.model.js";
 import { RefreshToken } from "../modules/auth/refresh-token.model.js";
+import { AuthToken } from "../modules/auth/auth-token.model.js";
 import { User } from "../modules/users/user.model.js";
 import { Course } from "../modules/courses/course.model.js";
 import { Module } from "../modules/modules/module.model.js";
@@ -77,9 +78,20 @@ LessonProgress.belongsTo(Lesson, {
 	foreignKey: "lessonId"
 });
 
+User.hasMany(AuthToken, {
+	as: "authTokens",
+	foreignKey: "userId"
+});
+
+AuthToken.belongsTo(User, {
+	as: "user",
+	foreignKey: "userId"
+});
+
 export {
 	LoginLog,
 	RefreshToken,
+	AuthToken,
 	User,
 	Course,
 	Module,

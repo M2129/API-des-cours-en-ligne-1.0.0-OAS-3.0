@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
-import crypto from "crypto";
 
 import {
+    AppError,
     BadRequestError,
     ConflictError,
     NotFoundError,
@@ -23,14 +23,24 @@ import {
 import { AuthService } from "./auth.service.js";
 import { RefreshTokenRepository } from "./refresh-token.repository.js";
 import { UserRepository } from "../users/user.repository.js";
-
-// In-memory store for password reset tokens (simulation, no real email)
-const passwordResetTokens = new Map<string, { userId: number; expiresAt: Date }>();
-// In-memory store for single-use email verification tokens
-const emailVerificationTokens = new Map<string, { userId: number; expiresAt: Date }>();
+import { UserService } from "../users/user.service.js";
+import { AuthTokenRepository } from "./auth-token.repository.js";
+import { AuthTokenService } from "./auth-token.service.js";
+import { createEmailService, type IEmailService } from "./email.service.js";
+import { sequelize } from "../../database/sequelize.js";
+import { env } from "../../config/env.js";
 
 const refreshTokenRepository = new RefreshTokenRepository();
 const userRepository = new UserRepository();
+const userService = new UserService(userRepository);
+const authTokenRepository = new AuthTokenRepository();
+const authTokenService = new AuthTokenService(authTokenRepository, userRepository);
+
+export let emailService: IEmailService = createEmailService();
+
+export const setEmailService = (customEmailService: IEmailService): void => {
+    emailService = customEmailService;
+};
 
 const authService = new AuthService();
 
@@ -48,18 +58,19 @@ export const register = async (req: Request, res: Response) => {
         try {
             const user = await authService.register(result.data);
 
-            // Simulation d'envoi d'email : génère un token de vérification à usage unique
-            const verificationToken = crypto.randomBytes(32).toString("hex");
-            emailVerificationTokens.set(verificationToken, {
-                userId: user.id,
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
-            });
+            // Génération transactionnelle du token persistant et envoi d'email (24h)
+            const { rawToken } = await authTokenService.generateAndSendToken(
+                user.id,
+                user.email,
+                "EMAIL_VERIFICATION",
+                emailService
+            );
 
             return res.status(201).json({
                 message: "Compte créé avec succès",
                 user,
-                // Champ de simulation uniquement (pas d'envoi réel d'email)
-                emailVerificationToken: verificationToken
+                // Ne jamais exposer le token brut en production
+                ...(env.nodeEnv !== "production" ? { emailVerificationToken: rawToken } : {})
             });
         } catch (error) {
             if (error instanceof ConflictError) {
@@ -193,15 +204,31 @@ export const forgotPassword = async (req: Request, res: Response) => {
         const user = await userRepository.findByEmail(result.data.email);
 
         if (user) {
-            const token = crypto.randomBytes(32).toString("hex");
             const userId = user.get("id") as number;
-            passwordResetTokens.set(token, {
-                userId,
-                expiresAt: new Date(Date.now() + 60 * 60 * 1000) // 1 hour
-            });
+            const userEmail = user.get("email") as string;
+            try {
+                // Génération transactionnelle avec invalidation des anciens tokens actifs et envoi d'e-mail (1h)
+                await authTokenService.generateAndSendToken(
+                    userId,
+                    userEmail,
+                    "PASSWORD_RESET",
+                    emailService
+                );
+            } catch (smtpError) {
+                if (smtpError instanceof AppError && smtpError.code === "EMAIL_SENDING_FAILED") {
+                    // Journalisation sécurisée côté serveur sans divulguer le token, l'e-mail ou les credentials SMTP
+                    console.error(
+                        "[Auth] Échec de l'envoi de l'e-mail de réinitialisation (SMTP indisponible ou rejeté). Le token généré a été révoqué."
+                    );
+                    // On n'expose pas l'échec au client pour garantir l'anti-énumération constante
+                } else {
+                    // Ne pas masquer les pannes internes/MySQL : propager vers le catch général (HTTP 500)
+                    throw smtpError;
+                }
+            }
         }
 
-        // Always return 200 to avoid revealing whether the email exists
+        // Réponse générique constante pour empêcher l'énumération des comptes
         return res.status(200).json({
             message: "Si un compte existe avec cet email, vous recevrez un lien de réinitialisation"
         });
@@ -227,30 +254,44 @@ export const resetPassword = async (req: Request, res: Response) => {
             });
         }
 
-        const tokenData = passwordResetTokens.get(result.data.token);
+        try {
+            // Cohérence transactionnelle stricte : consommation du token et mise à jour du mot de passe dans la même transaction
+            await sequelize.transaction(async (transaction) => {
+                const { userId } = await authTokenService.consumeToken(
+                    result.data.token,
+                    "PASSWORD_RESET",
+                    { transaction }
+                );
 
-        if (!tokenData || tokenData.expiresAt < new Date()) {
-            passwordResetTokens.delete(result.data.token);
-            return res.status(400).json({
-                message: "Token invalide ou expiré"
+                const user = await userRepository.findById(userId, {
+                    transaction,
+                    lock: transaction.LOCK.UPDATE
+                });
+
+                if (!user) {
+                    throw new NotFoundError("Utilisateur introuvable");
+                }
+
+                const hashedPassword = await hashPassword(result.data.newPassword);
+                await user.update({ password: hashedPassword }, { transaction });
             });
-        }
 
-        const hashedPassword = await hashPassword(result.data.newPassword);
-        const user = await userRepository.findById(tokenData.userId);
-
-        if (!user) {
-            return res.status(404).json({
-                message: "Utilisateur introuvable"
+            return res.status(200).json({
+                message: "Mot de passe réinitialisé avec succès"
             });
+        } catch (error) {
+            if (error instanceof BadRequestError) {
+                return res.status(400).json({
+                    message: "Token invalide ou expiré"
+                });
+            }
+            if (error instanceof NotFoundError) {
+                return res.status(404).json({
+                    message: error.message
+                });
+            }
+            throw error;
         }
-
-        await user.update({ password: hashedPassword });
-        passwordResetTokens.delete(result.data.token);
-
-        return res.status(200).json({
-            message: "Mot de passe réinitialisé avec succès"
-        });
     } catch (error) {
         console.error("Erreur lors de la réinitialisation :", error);
 
@@ -273,31 +314,74 @@ export const verifyEmail = async (req: Request, res: Response) => {
             });
         }
 
-        const tokenData = emailVerificationTokens.get(result.data.token);
+        try {
+            // Cohérence transactionnelle stricte : consommation du token et mise à jour d'emailVerified / email dans la même transaction
+            await sequelize.transaction(async (transaction) => {
+                const { userId, tokenRecord } = await authTokenService.consumeToken(
+                    result.data.token,
+                    "EMAIL_VERIFICATION",
+                    { transaction }
+                );
 
-        if (!tokenData || tokenData.expiresAt < new Date()) {
-            emailVerificationTokens.delete(result.data.token);
-            return res.status(400).json({
-                message: "Token de vérification invalide ou expiré"
+                const user = await userRepository.findById(userId, {
+                    transaction,
+                    lock: transaction.LOCK.UPDATE
+                });
+
+                if (!user) {
+                    throw new NotFoundError("Utilisateur introuvable");
+                }
+
+                const targetEmail = tokenRecord.get("targetEmail") as string | null | undefined;
+
+                if (targetEmail) {
+                    // Vérifier si targetEmail n'a pas été pris entre-temps par un autre compte
+                    const existingUser = await userRepository.findByEmail(targetEmail, {
+                        transaction,
+                        lock: transaction.LOCK.UPDATE
+                    });
+
+                    if (existingUser && existingUser.get("id") !== userId) {
+                        throw new ConflictError("Cette adresse email est déjà utilisée");
+                    }
+
+                    try {
+                        await user.update(
+                            { email: targetEmail, emailVerified: true },
+                            { transaction }
+                        );
+                    } catch (updateError: any) {
+                        if (updateError?.name === "SequelizeUniqueConstraintError") {
+                            throw new ConflictError("Cette adresse email est déjà utilisée");
+                        }
+                        throw updateError;
+                    }
+                } else {
+                    await user.update({ emailVerified: true }, { transaction });
+                }
             });
-        }
 
-        // Token à usage unique
-        emailVerificationTokens.delete(result.data.token);
-
-        const user = await userRepository.findById(tokenData.userId);
-
-        if (!user) {
-            return res.status(404).json({
-                message: "Utilisateur introuvable"
+            return res.status(200).json({
+                message: "Email vérifié avec succès"
             });
+        } catch (error) {
+            if (error instanceof BadRequestError) {
+                return res.status(400).json({
+                    message: "Token de vérification invalide ou expiré"
+                });
+            }
+            if (error instanceof ConflictError) {
+                return res.status(409).json({
+                    message: error.message
+                });
+            }
+            if (error instanceof NotFoundError) {
+                return res.status(404).json({
+                    message: error.message
+                });
+            }
+            throw error;
         }
-
-        await user.update({ emailVerified: true });
-
-        return res.status(200).json({
-            message: "Email vérifié avec succès"
-        });
     } catch (error) {
         console.error("Erreur lors de la vérification de l'email :", error);
 
@@ -422,18 +506,20 @@ export const changeEmail = async (req: Request, res: Response) => {
             return res.status(409).json({ message: "Cette adresse email est déjà utilisée" });
         }
 
-        // Simulation: envoi d'un lien de vérification pour la nouvelle adresse.
-        // On ne modifie pas l'email ni emailVerified avant la vérification.
-        const verificationToken = crypto.randomBytes(32).toString("hex");
-        emailVerificationTokens.set(verificationToken, {
-            userId: req.auth.userId,
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
-        });
+        // Envoi d'un token persistant de vérification pour la nouvelle adresse (24h)
+        // L'adresse actuelle Users.email reste inchangée tant que la nouvelle n'est pas confirmée.
+        const { rawToken } = await authTokenService.generateAndSendToken(
+            req.auth.userId,
+            result.data.newEmail,
+            "EMAIL_VERIFICATION",
+            emailService,
+            { targetEmail: result.data.newEmail }
+        );
 
         return res.status(200).json({
             message: "Un email de vérification a été envoyé à votre nouvelle adresse",
-            // Champ de simulation uniquement (pas d'envoi réel d'email)
-            emailVerificationToken: verificationToken
+            // Ne jamais exposer le token brut en production
+            ...(env.nodeEnv !== "production" ? { emailVerificationToken: rawToken } : {})
         });
     } catch (error) {
         console.error("Erreur lors du changement d'email :", error);
@@ -452,17 +538,24 @@ export const resendVerification = async (req: Request, res: Response) => {
             return res.status(401).json({ message: "Authentification requise" });
         }
 
-        // Simulation: renvoi d'un lien de vérification
-        const verificationToken = crypto.randomBytes(32).toString("hex");
-        emailVerificationTokens.set(verificationToken, {
-            userId: req.auth.userId,
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
-        });
+        const user = await userRepository.findById(req.auth.userId);
+
+        if (!user) {
+            return res.status(404).json({ message: "Utilisateur introuvable" });
+        }
+
+        const userEmail = user.get("email") as string;
+        const { rawToken } = await authTokenService.generateAndSendToken(
+            req.auth.userId,
+            userEmail,
+            "EMAIL_VERIFICATION",
+            emailService
+        );
 
         return res.status(200).json({
             message: "Email de vérification envoyé",
-            // Champ de simulation uniquement (pas d'envoi réel d'email)
-            emailVerificationToken: verificationToken
+            // Ne jamais exposer le token brut en production
+            ...(env.nodeEnv !== "production" ? { emailVerificationToken: rawToken } : {})
         });
     } catch (error) {
         console.error("Erreur lors du renvoi de la vérification :", error);
@@ -481,6 +574,9 @@ export const deactivateAccount = async (req: Request, res: Response) => {
             return res.status(401).json({ message: "Authentification requise" });
         }
 
+        // Désactive l'utilisateur de manière transactionnelle avec protection du dernier admin actif
+        await userService.updateActive(req.auth.userId, false);
+
         // Revoke all sessions for this user
         await refreshTokenRepository.revokeAllByUser(req.auth.userId, new Date());
 
@@ -488,6 +584,12 @@ export const deactivateAccount = async (req: Request, res: Response) => {
             message: "Compte désactivé avec succès"
         });
     } catch (error) {
+        if (error instanceof BadRequestError) {
+            return res.status(400).json({ message: error.message });
+        }
+        if (error instanceof NotFoundError) {
+            return res.status(404).json({ message: error.message });
+        }
         console.error("Erreur lors de la désactivation du compte :", error);
 
         return res.status(500).json({

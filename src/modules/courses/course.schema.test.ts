@@ -45,6 +45,19 @@ describe("courseIdParamSchema / courseIdSchema", () => {
         expect(courseIdParamSchema.safeParse({}).success).toBe(false);
         expect(courseIdSchema.safeParse(undefined).success).toBe(false);
     });
+
+    it("accepte un UUID valide", () => {
+        const validUuid = "550e8400-e29b-41d4-a716-446655440000";
+        expect(courseIdSchema.safeParse(validUuid).success).toBe(true);
+        expect(courseIdParamSchema.safeParse({ id: validUuid }).success).toBe(true);
+    });
+
+    it("rejette les identifiants avec zéros non significatifs ou espaces ('012', ' 12 ')", () => {
+        expect(courseIdSchema.safeParse("012").success).toBe(false);
+        expect(courseIdSchema.safeParse(" 12 ").success).toBe(false);
+        expect(courseIdParamSchema.safeParse({ id: "012" }).success).toBe(false);
+        expect(courseIdParamSchema.safeParse({ id: " 12 " }).success).toBe(false);
+    });
 });
 
 describe("moduleIdParamSchema / moduleIdSchema", () => {
@@ -52,6 +65,12 @@ describe("moduleIdParamSchema / moduleIdSchema", () => {
         expect(moduleIdSchema.safeParse(1).success).toBe(true);
         expect(moduleIdParamSchema.safeParse({ moduleId: 5 }).success).toBe(true);
         expect(moduleIdParamSchema.safeParse({ moduleId: "8" }).success).toBe(true);
+    });
+
+    it("accepte un UUID valide", () => {
+        const validUuid = "550e8400-e29b-41d4-a716-446655440000";
+        expect(moduleIdSchema.safeParse(validUuid).success).toBe(true);
+        expect(moduleIdParamSchema.safeParse({ moduleId: validUuid }).success).toBe(true);
     });
 
     it("rejette un identifiant nul ou négatif", () => {

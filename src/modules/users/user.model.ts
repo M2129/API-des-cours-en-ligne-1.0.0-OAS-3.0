@@ -4,7 +4,8 @@ import { sequelize } from "../../database/sequelize.js";
 export const User = sequelize.define("User", {
     uuid: {
         type: DataTypes.CHAR(36),
-        allowNull: true,
+        allowNull: false,
+        defaultValue: DataTypes.UUIDV4,
         unique: true
     },
 

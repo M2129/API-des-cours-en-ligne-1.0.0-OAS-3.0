@@ -16,6 +16,11 @@ import * as addCategoryToCourses from "./migrations/009-add-category-to-courses.
 import * as addUuidToUsersAndCourses from "./migrations/010-add-uuid-to-users-and-courses.js";
 import * as addIsActiveToUsers from "./migrations/011-add-isactive-to-users.js";
 import * as addEmailVerifiedToUsers from "./migrations/012-add-email-verified-to-users.js";
+import * as addUuidToEnrollmentsAndLessons from "./migrations/013-add-uuid-to-enrollments-and-lessons.js";
+import * as addUuidToModules from "./migrations/014-add-uuid-to-modules.js";
+import * as createAuthTokens from "./migrations/015-create-auth-tokens.js";
+import * as addTargetEmailToAuthTokens from "./migrations/016-add-target-email-to-auth-tokens.js";
+import * as addSummaryAndLevelToCourses from "./migrations/017-add-summary-and-level-to-courses.js";
 
 // Stockage de l'historique des migrations
 export const storage = new SequelizeStorage({
@@ -131,6 +136,51 @@ export const migrator = new Umzug({
             },
             down: async ({ context }) => {
                 await addEmailVerifiedToUsers.down({ context });
+            }
+        },
+        {
+            name: "013-add-uuid-to-enrollments-and-lessons.js",
+            up: async ({ context }) => {
+                await addUuidToEnrollmentsAndLessons.up({ context });
+            },
+            down: async ({ context }) => {
+                await addUuidToEnrollmentsAndLessons.down({ context });
+            }
+        },
+        {
+            name: "014-add-uuid-to-modules.js",
+            up: async ({ context }) => {
+                await addUuidToModules.up({ context });
+            },
+            down: async ({ context }) => {
+                await addUuidToModules.down({ context });
+            }
+        },
+        {
+            name: "015-create-auth-tokens.js",
+            up: async ({ context }) => {
+                await createAuthTokens.up({ context });
+            },
+            down: async ({ context }) => {
+                await createAuthTokens.down({ context });
+            }
+        },
+        {
+            name: "016-add-target-email-to-auth-tokens.js",
+            up: async ({ context }) => {
+                await addTargetEmailToAuthTokens.up({ context });
+            },
+            down: async ({ context }) => {
+                await addTargetEmailToAuthTokens.down({ context });
+            }
+        },
+        {
+            name: "017-add-summary-and-level-to-courses.js",
+            up: async ({ context }) => {
+                await addSummaryAndLevelToCourses.up({ context });
+            },
+            down: async ({ context }) => {
+                await addSummaryAndLevelToCourses.down({ context });
             }
         }
     ],

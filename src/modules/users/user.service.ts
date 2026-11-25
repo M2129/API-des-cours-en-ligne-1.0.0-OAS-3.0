@@ -1,5 +1,6 @@
 import { hashPassword } from "../../shared/password.js";
-import { ConflictError, NotFoundError } from "../../shared/errors.js";
+import { BadRequestError, ConflictError, NotFoundError } from "../../shared/errors.js";
+import { sequelize } from "../../database/sequelize.js";
 import { UserRepository, type FindAllUsersOptions } from "./user.repository.js";
 
 type UserRole = "ADMIN" | "TEACHER" | "LEARNER";
@@ -29,7 +30,7 @@ export class UserService {
         private readonly userRepository: UserRepository = new UserRepository()
     ) {}
 
-    async getProfile(userId: number): Promise<UserProfile> {
+    async getProfile(userId: number | string): Promise<UserProfile> {
         const user = await this.userRepository.findById(userId);
 
         if (!user) {
@@ -75,7 +76,7 @@ export class UserService {
         return this.toProfile(user);
     }
 
-    async getUser(userId: number): Promise<UserProfile> {
+    async getUser(userId: number | string): Promise<UserProfile> {
         const user = await this.userRepository.findById(userId);
         if (!user) {
             throw new NotFoundError("Utilisateur introuvable");
@@ -83,41 +84,79 @@ export class UserService {
         return this.toProfile(user);
     }
 
-    async updateRole(userId: number, role: UserRole): Promise<UserProfile> {
-        const user = await this.userRepository.findById(userId);
-        if (!user) {
-            throw new NotFoundError("Utilisateur introuvable");
-        }
-        await this.userRepository.updateRole(userId, role);
-        const updated = await this.userRepository.findById(userId);
-        return this.toProfile(updated!);
+    async updateRole(userId: number | string, role: UserRole): Promise<UserProfile> {
+        return sequelize.transaction(async (transaction) => {
+            const user = await this.userRepository.findById(userId, { transaction });
+            if (!user) {
+                throw new NotFoundError("Utilisateur introuvable");
+            }
+            const internalId = user.get("id") as number;
+            const currentRole = user.get("role") as UserRole;
+            const currentIsActive = Boolean(user.get("isActive"));
+
+            if (currentRole === "ADMIN" && currentIsActive && role !== "ADMIN") {
+                const activeAdmins = await this.userRepository.findActiveAdmins({
+                    transaction,
+                    lock: transaction.LOCK.UPDATE
+                });
+                if (activeAdmins.length <= 1) {
+                    throw new BadRequestError(
+                        "Impossible de modifier le rôle du dernier administrateur actif"
+                    );
+                }
+            }
+
+            await this.userRepository.updateRole(internalId, role, { transaction });
+            const updated = await this.userRepository.findById(internalId, { transaction });
+            return this.toProfile(updated!);
+        });
     }
 
-    async updateActive(userId: number, isActive: boolean): Promise<UserProfile> {
-        const user = await this.userRepository.findById(userId);
-        if (!user) {
-            throw new NotFoundError("Utilisateur introuvable");
-        }
-        await this.userRepository.updateActive(userId, isActive);
-        const updated = await this.userRepository.findById(userId);
-        return this.toProfile(updated!);
+    async updateActive(userId: number | string, isActive: boolean): Promise<UserProfile> {
+        return sequelize.transaction(async (transaction) => {
+            const user = await this.userRepository.findById(userId, { transaction });
+            if (!user) {
+                throw new NotFoundError("Utilisateur introuvable");
+            }
+            const internalId = user.get("id") as number;
+            const currentRole = user.get("role") as UserRole;
+            const currentIsActive = Boolean(user.get("isActive"));
+
+            if (currentRole === "ADMIN" && currentIsActive && !isActive) {
+                const activeAdmins = await this.userRepository.findActiveAdmins({
+                    transaction,
+                    lock: transaction.LOCK.UPDATE
+                });
+                if (activeAdmins.length <= 1) {
+                    throw new BadRequestError(
+                        "Impossible de désactiver le dernier administrateur actif"
+                    );
+                }
+            }
+
+            await this.userRepository.updateActive(internalId, isActive, { transaction });
+            const updated = await this.userRepository.findById(internalId, { transaction });
+            return this.toProfile(updated!);
+        });
     }
 
-    async revokeSessions(userId: number): Promise<{ revoked: number }> {
+    async revokeSessions(userId: number | string): Promise<{ revoked: number }> {
         const user = await this.userRepository.findById(userId);
         if (!user) {
             throw new NotFoundError("Utilisateur introuvable");
         }
-        const [count] = await this.userRepository.revokeAllSessions(userId, new Date());
+        const internalId = user.get("id") as number;
+        const [count] = await this.userRepository.revokeAllSessions(internalId, new Date());
         return { revoked: count };
     }
 
-    async getSecurityEvents(userId: number): Promise<unknown[]> {
+    async getSecurityEvents(userId: number | string): Promise<unknown[]> {
         const user = await this.userRepository.findById(userId);
         if (!user) {
             throw new NotFoundError("Utilisateur introuvable");
         }
-        const logs = await this.userRepository.findSecurityEvents(userId);
+        const internalId = user.get("id") as number;
+        const logs = await this.userRepository.findSecurityEvents(internalId);
         return logs.map((log) => ({
             id: log.get("id"),
             email: log.get("email"),

@@ -36,6 +36,7 @@ export type UserRole = "ADMIN" | "TEACHER" | "LEARNER";
 
 export type RegisterResult = {
     id: number;
+    uuid: string;
     firstName: string;
     lastName: string;
     email: string;
@@ -46,6 +47,7 @@ export type LoginResult = {
     refreshToken: string;
     user: {
         id: number;
+        uuid: string;
         firstName: string;
         lastName: string;
         email: string;
@@ -82,6 +84,7 @@ export class AuthService {
 
         return {
             id: user.get("id") as number,
+            uuid: user.get("uuid") as string,
             firstName: input.firstName,
             lastName: input.lastName,
             email: input.email
@@ -148,6 +151,7 @@ export class AuthService {
             refreshToken,
             user: {
                 id: userId,
+                uuid: user.get("uuid") as string,
                 firstName: user.get("firstName") as string,
                 lastName: user.get("lastName") as string,
                 email: user.get("email") as string,

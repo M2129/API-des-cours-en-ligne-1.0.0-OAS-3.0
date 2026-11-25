@@ -13,6 +13,7 @@ describe("CourseService", () => {
     let mockCourseRepository: {
         create: ReturnType<typeof vi.fn>;
         findById: ReturnType<typeof vi.fn>;
+        findByUuid: ReturnType<typeof vi.fn>;
         findAll: ReturnType<typeof vi.fn>;
         update: ReturnType<typeof vi.fn>;
         delete: ReturnType<typeof vi.fn>;
@@ -72,6 +73,7 @@ describe("CourseService", () => {
         mockCourseRepository = {
             create: vi.fn(),
             findById: vi.fn(),
+            findByUuid: vi.fn(),
             findAll: vi.fn(),
             update: vi.fn(),
             delete: vi.fn(),
@@ -549,4 +551,89 @@ it("refuse à un LEARNER de consulter un cours ARCHIVED", async () => {
         content: "Contenu de la leçon"
     });
 });
+
+    describe("Support UUID", () => {
+        const courseUuid = "550e8400-e29b-41d4-a716-446655440000";
+        const moduleUuid = "660e8400-e29b-41d4-a716-446655440000";
+
+        it("résout getCourseById avec un UUID de cours", async () => {
+            const publishedCourse = createMockCourse({
+                id: 12,
+                uuid: courseUuid,
+                status: "PUBLISHED"
+            });
+            mockCourseRepository.findById.mockResolvedValue(publishedCourse);
+
+            const result = await courseService.getCourseById(courseUuid);
+
+            expect(mockCourseRepository.findById).toHaveBeenCalledWith(courseUuid);
+            expect(result.get("id")).toBe(12);
+            expect(result.get("uuid")).toBe(courseUuid);
+        });
+
+        it("utilise l'identifiant numérique interne pour deleteCourse même avec un UUID", async () => {
+            const draftCourse = createMockCourse({
+                id: 12,
+                uuid: courseUuid,
+                status: "DRAFT",
+                teacherId: 10
+            });
+            mockCourseRepository.findById.mockResolvedValue(draftCourse);
+            mockCourseRepository.countEnrollments.mockResolvedValue(0);
+
+            await courseService.deleteCourse(courseUuid, teacherUser);
+
+            expect(mockCourseRepository.findById).toHaveBeenCalledWith(courseUuid);
+            expect(mockCourseRepository.countEnrollments).toHaveBeenCalledWith(12);
+            expect(mockCourseRepository.delete).toHaveBeenCalledWith(draftCourse);
+        });
+
+        it("utilise l'identifiant numérique interne pour addModule même avec un UUID de cours", async () => {
+            const course = createMockCourse({
+                id: 12,
+                uuid: courseUuid,
+                teacherId: 10
+            });
+            mockCourseRepository.findById.mockResolvedValue(course);
+            mockCourseRepository.createModule.mockResolvedValue({ id: 101 });
+
+            await courseService.addModule(courseUuid, { title: "Nouveau module" }, teacherUser);
+
+            expect(mockCourseRepository.createModule).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    courseId: 12,
+                    title: "Nouveau module"
+                })
+            );
+        });
+
+        it("résout addLesson avec un UUID de module et utilise l'identifiant numérique interne du module", async () => {
+            const moduleItem = createMockModule({
+                id: 101,
+                uuid: moduleUuid,
+                courseId: 12
+            });
+            const course = createMockCourse({
+                id: 12,
+                teacherId: 10
+            });
+            mockCourseRepository.findModuleById.mockResolvedValue(moduleItem);
+            mockCourseRepository.findById.mockResolvedValue(course);
+            mockCourseRepository.createLesson.mockResolvedValue({ id: 501 });
+
+            await courseService.addLesson(
+                moduleUuid,
+                { title: "Nouvelle leçon", content: "Contenu" },
+                teacherUser
+            );
+
+            expect(mockCourseRepository.findModuleById).toHaveBeenCalledWith(moduleUuid);
+            expect(mockCourseRepository.createLesson).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    moduleId: 101,
+                    title: "Nouvelle leçon"
+                })
+            );
+        });
+    });
 });

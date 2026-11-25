@@ -1,8 +1,18 @@
 import type { Request, Response } from "express";
 import { asyncHandler } from "../../shared/async-handler.js";
 import { sendSuccess } from "../../shared/api-response.js";
+import { isUuid } from "../../shared/uuid.js";
 import { EnrollmentService } from "./enrollment.service.js";
 import type { BulkEnrollInput } from "./enrollment.schema.js";
+
+function extractId(req: Request, key = "id"): number | string {
+    const validated = (req.validated?.params as Record<string, unknown> | undefined)?.[key];
+    const raw = (validated ?? req.params[key]) as number | string;
+    if (typeof raw === "string" && !isUuid(raw) && /^[1-9]\d*$/.test(raw)) {
+        return Number(raw);
+    }
+    return raw;
+}
 
 export class EnrollmentController {
     constructor(
@@ -10,8 +20,10 @@ export class EnrollmentController {
     ) {}
 
     enrollLearner = asyncHandler(async (req: Request, res: Response) => {
-        const courseId = Number(req.params.id);
-        const learnerId = Number(req.body.learnerId);
+        const courseId = extractId(req, "id");
+
+        const rawLearnerId = ((req.validated?.body as { learnerId?: number | string })?.learnerId ?? req.body.learnerId) as number | string;
+        const learnerId = typeof rawLearnerId === "string" && !isUuid(rawLearnerId) && /^[1-9]\d*$/.test(rawLearnerId) ? Number(rawLearnerId) : rawLearnerId;
 
         const enrollment = await this.enrollmentService.enrollLearner(
             courseId,
@@ -23,7 +35,7 @@ export class EnrollmentController {
     });
 
     selfEnroll = asyncHandler(async (req: Request, res: Response) => {
-        const courseId = Number(req.params.id);
+        const courseId = extractId(req, "id");
 
         const enrollment = await this.enrollmentService.selfEnroll(
             courseId,
@@ -43,7 +55,7 @@ export class EnrollmentController {
 
     getCourseEnrollments = asyncHandler(
         async (req: Request, res: Response) => {
-            const courseId = Number(req.params.id);
+            const courseId = extractId(req, "id");
 
             const enrollments =
                 await this.enrollmentService.getCourseEnrollments(
@@ -56,19 +68,16 @@ export class EnrollmentController {
     );
 
     bulkEnroll = asyncHandler(async (req: Request, res: Response) => {
-        const paramId = req.params.idCours ?? req.params.id;
-        const bodyId = req.body.idCourse ?? req.body.idCours;
-        const rawId = paramId ?? bodyId;
-        const courseId =
-            typeof rawId === "number" ||
-            (typeof rawId === "string" && !rawId.includes("-") && !Number.isNaN(Number(rawId)))
-                ? Number(rawId)
-                : (rawId as string | number);
+        const validatedParams = req.validated?.params as Record<string, unknown> | undefined;
+        const validatedBody = req.validated?.body as Record<string, unknown> | undefined;
 
-        const { idEtudiants } = req.body as BulkEnrollInput & {
-            idCourse?: number | string;
-            idCours?: number | string;
-        };
+        const paramId = (validatedParams?.idCours ?? validatedParams?.id ?? req.params.idCours ?? req.params.id) as number | string | undefined;
+        const bodyId = (validatedBody?.idCourse ?? validatedBody?.idCours ?? req.body.idCourse ?? req.body.idCours) as number | string | undefined;
+        const rawId = (paramId ?? bodyId)! as number | string;
+        const courseId = typeof rawId === "string" && !isUuid(rawId) && /^[1-9]\d*$/.test(rawId) ? Number(rawId) : rawId;
+
+        const rawEtudiants = (validatedBody?.idEtudiants ?? req.body.idEtudiants) as (number | string)[];
+        const idEtudiants = rawEtudiants.map(id => typeof id === "string" && !isUuid(id) && /^[1-9]\d*$/.test(id) ? Number(id) : id);
 
         const { added } = await this.enrollmentService.bulkEnroll(
             courseId,
@@ -83,6 +92,24 @@ export class EnrollmentController {
             messages: message
         });
     });
+
+    getTeacherStudents = asyncHandler(async (req: Request, res: Response) => {
+        const validatedParams = req.validated?.params as Record<string, unknown> | undefined;
+        const rawProfId = (validatedParams?.idProf ?? validatedParams?.id ?? req.params.idProf ?? req.params.id) as number | string;
+        const profId = typeof rawProfId === "string" && !isUuid(rawProfId) && /^[1-9]\d*$/.test(rawProfId) ? Number(rawProfId) : rawProfId;
+
+        const validatedQuery = req.validated?.query as { page: number; limit: number } | undefined;
+        const page = validatedQuery?.page ?? (Number(req.query.page) || 1);
+        const limit = validatedQuery?.limit ?? (Number(req.query.limit ?? req.query.per_page) || 10);
+
+        const result = await this.enrollmentService.getTeacherStudents(
+            profId,
+            req.auth!,
+            { page, limit }
+        );
+
+        return sendSuccess(res, result, 200);
+    });
 }
 
 export const enrollmentController = new EnrollmentController();
@@ -94,3 +121,4 @@ export const getCourseEnrollments =
 export const getMyEnrollments =
     enrollmentController.getMyEnrollments;
 export const bulkEnroll = enrollmentController.bulkEnroll;
+export const getTeacherStudents = enrollmentController.getTeacherStudents;

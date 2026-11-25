@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => ({
     deleteCourse: vi.fn(),
     publishCourse: vi.fn(),
     addModule: vi.fn(),
-    addLesson: vi.fn()
+    addLesson: vi.fn(),
+    updateTestCourse: vi.fn()
 }));
 
 vi.mock("../../shared/token.js", () => ({
@@ -46,7 +47,8 @@ vi.mock("./course.service.js", () => ({
             deleteCourse: mocks.deleteCourse,
             publishCourse: mocks.publishCourse,
             addModule: mocks.addModule,
-            addLesson: mocks.addLesson
+            addLesson: mocks.addLesson,
+            updateTestCourse: mocks.updateTestCourse
         };
     })
 }));
@@ -213,6 +215,18 @@ describe("Course Routes", () => {
             const body = await res.json();
             expect(body).toEqual(course);
             expect(mocks.getCourseById).toHaveBeenCalledWith(42, undefined);
+        });
+
+        it("retourne 200 avec le cours si l'identifiant est un UUID valide", async () => {
+            const uuid = "550e8400-e29b-41d4-a716-446655440000";
+            const course = { id: 42, uuid, title: "Cours UUID", status: "PUBLISHED" };
+            mocks.getCourseById.mockResolvedValue(course);
+
+            const res = await fetch(`${baseUrl}/api/courses/${uuid}`);
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body).toEqual(course);
+            expect(mocks.getCourseById).toHaveBeenCalledWith(uuid, undefined);
         });
     });
 
@@ -504,6 +518,41 @@ describe("Course Routes", () => {
             expect(mocks.addLesson).toHaveBeenCalledWith(
                 10,
                 { title: "Leçon 1", content: "Contenu" },
+                { userId: 10, sessionId: "sess-teacher", role: "TEACHER", emailVerified: true }
+            );
+        });
+
+        it("ajoute une leçon avec un moduleId sous forme d'UUID et retourne 201", async () => {
+            const moduleUuid = "550e8400-e29b-41d4-a716-446655440000";
+            const createdLesson = {
+                id: 101,
+                moduleId: 10,
+                title: "Leçon UUID",
+                content: "Contenu UUID"
+            };
+            mocks.addLesson.mockResolvedValue(createdLesson);
+
+            const res = await fetch(
+                `${baseUrl}/api/courses/modules/${moduleUuid}/lessons`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: "Bearer teacher-token"
+                    },
+                    body: JSON.stringify({
+                        title: "Leçon UUID",
+                        content: "Contenu UUID"
+                    })
+                }
+            );
+
+            expect(res.status).toBe(201);
+            const body = await res.json();
+            expect(body).toEqual(createdLesson);
+            expect(mocks.addLesson).toHaveBeenCalledWith(
+                moduleUuid,
+                { title: "Leçon UUID", content: "Contenu UUID" },
                 { userId: 10, sessionId: "sess-teacher", role: "TEACHER", emailVerified: true }
             );
         });

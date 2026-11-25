@@ -3,7 +3,9 @@ import type { Request, Response, Express } from "express";
 import swaggerUi from "swagger-ui-express";
 import { swaggerDocument } from "./config/swagger.js";
 import { sequelize } from "./database/sequelize.js";
+import "./database/models.js";
 
+import { env } from "./config/env.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 
 import roleRoutes from "./modules/demo/demo.routes.js";
@@ -14,16 +16,23 @@ import { errorHandler } from "./middlewares/error-handler.js";
 import { notFound } from "./middlewares/not-found.js";
 import { authenticate } from "./middlewares/auth.middleware.js";
 import { authorize } from "./middlewares/authorize.middleware.js";
-import { validateBody, validateParams } from "./middlewares/validate.js";
-import { bulkEnroll } from "./modules/enrollments/enrollment.controller.js";
+import { validateBody, validateParams, validateQuery } from "./middlewares/validate.js";
+import { bulkEnroll, getTeacherStudents } from "./modules/enrollments/enrollment.controller.js";
 import {
     bulkEnrollSchema,
-    courseIdOrIdCoursParamSchema
+    courseIdOrIdCoursParamSchema,
+    profIdParamSchema,
+    teacherStudentsQuerySchema
 } from "./modules/enrollments/enrollment.schema.js";
-
-import { User } from "./modules/users/user.model.js";
+import { updateTestCourse } from "./modules/courses/course.controller.js";
+import {
+    testCourseIdParamSchema,
+    updateTestCourseSchema
+} from "./modules/courses/course.schema.js";
 
 import enrollmentRoutes from "./modules/enrollments/enrollment.routes.js";
+import progressRoutes from "./modules/progress/progress.routes.js";
+import studentRoutes from "./modules/enrollments/student.routes.js";
 
 const app: Express = express();
 
@@ -34,23 +43,16 @@ app.get("/", (req: Request, res: Response) => {
     res.send("Bienvenue sur mon serveur Node.js !");
 });
 
-// Consulter les vrais apprenants enregistrés en base
-app.get("/test/learners", async (_req: Request, res: Response) => {
-    const learners = await User.findAll({
-        where: { role: "LEARNER" },
-        attributes: ["id", "firstName", "lastName", "email"]
-    });
-    return res.status(200).json({
-        total: learners.length,
-        learners
-    });
-});
-
 app.use("/api/auth", authRoutes);
-app.use("/api/test/roles", roleRoutes);
+if (env.nodeEnv !== "production") {
+    app.use("/api/test/roles", roleRoutes);
+}
 app.use("/api/users", userRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/enrollments", enrollmentRoutes);
+app.use("/api/enrollments", progressRoutes);
+app.use("/api/students", studentRoutes);
+app.use("/students", studentRoutes);
 
 // Endpoint test/courses/:idCours/enrolls
 app.post(
@@ -65,6 +67,35 @@ app.post(
     validateParams(courseIdOrIdCoursParamSchema),
     validateBody(bulkEnrollSchema),
     bulkEnroll
+);
+
+// Endpoint modifier partiellement un cours test/courses/:idCours
+app.patch(
+    [
+        "/api/test/courses/:idCours",
+        "/api/test/courses/:id",
+        "/test/courses/:idCours",
+        "/test/courses/:id"
+    ],
+    authenticate,
+    authorize("ADMIN", "TEACHER"),
+    validateParams(testCourseIdParamSchema),
+    validateBody(updateTestCourseSchema),
+    updateTestCourse
+);
+
+// Endpoint afficher tous les learners qui font le cours d'un prof donne /api/students/prof/:idProf
+app.get(
+    [
+        "/api/students/prof/:idProf",
+        "/api/students/prof/:id",
+        "/students/prof/:idProf",
+        "/students/prof/:id"
+    ],
+    authenticate,
+    validateParams(profIdParamSchema),
+    validateQuery(teacherStudentsQuerySchema),
+    getTeacherStudents
 );
 
 app.get("/health", (req: Request, res: Response) => {

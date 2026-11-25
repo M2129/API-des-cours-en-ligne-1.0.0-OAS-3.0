@@ -2,6 +2,13 @@ import { DataTypes } from "sequelize";
 import { sequelize } from "../../database/sequelize.js";
 
 export const Enrollment = sequelize.define("Enrollment", {
+    uuid: {
+        type: DataTypes.CHAR(36),
+        allowNull: false,
+        defaultValue: DataTypes.UUIDV4,
+        unique: true
+    },
+
     courseId: {
         type: DataTypes.INTEGER,
         allowNull: false,

@@ -218,4 +218,31 @@ describe("CourseRepository", () => {
             });
         });
     });
+
+    describe("findModuleById (support UUID et ID numérique)", () => {
+        it("devrait appeler findByPk pour un identifiant numérique", async () => {
+            Module.findByPk.mockResolvedValue({ id: 5 });
+
+            const result = await repository.findModuleById(5);
+
+            expect(Module.findByPk).toHaveBeenCalledWith(5, expect.any(Object));
+            expect(result).toEqual({ id: 5 });
+        });
+
+        it("devrait appeler findOne where uuid pour un identifiant UUID", async () => {
+            const uuid = "550e8400-e29b-41d4-a716-446655440000";
+            // @ts-expect-error Mocking findOne for Module
+            Module.findOne = vi.fn().mockResolvedValue({ id: 5, uuid });
+
+            const result = await repository.findModuleById(uuid);
+
+            // @ts-expect-error Checked mocked method
+            expect(Module.findOne).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { uuid }
+                })
+            );
+            expect(result).toEqual({ id: 5, uuid });
+        });
+    });
 });

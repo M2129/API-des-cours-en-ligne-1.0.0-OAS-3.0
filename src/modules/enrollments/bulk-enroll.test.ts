@@ -325,4 +325,58 @@ describe("Endpoint POST /test/courses/:idCours/enrolls", () => {
         expect(data.success).toBe(true);
         expect(data.messages).toBe("2 etudiants sont ajoutes dans le cours");
     });
+
+    it("accepte une liste de 100 étudiants (limite maximale autorisée)", async () => {
+        mocks.findByIdCourse.mockResolvedValue({
+            get: vi.fn((key: string) => (key === "teacherId" ? 10 : "PUBLISHED"))
+        });
+
+        mocks.findByIdUser.mockImplementation(async (id: string | number) => {
+            if (id === 10) {
+                return {
+                    get: vi.fn((key: string) => (key === "role" ? "TEACHER" : id))
+                };
+            }
+            return {
+                get: vi.fn((key: string) => (key === "role" ? "LEARNER" : id))
+            };
+        });
+
+        const students100 = Array.from({ length: 100 }, (_, i) => i + 101);
+
+        const res = await fetch(`${baseUrl}/test/courses/42/enrolls`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer teacher-token"
+            },
+            body: JSON.stringify({
+                idEtudiants: students100
+            })
+        });
+
+        expect(res.status).toBe(201);
+        const data = await res.json();
+        expect(data.success).toBe(true);
+        expect(data.messages).toBe("100 etudiants sont ajoutes dans le cours");
+    });
+
+    it("rejette 400 si la liste contient 101 étudiants (> 100)", async () => {
+        const students101 = Array.from({ length: 101 }, (_, i) => i + 1);
+
+        const res = await fetch(`${baseUrl}/test/courses/42/enrolls`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer teacher-token"
+            },
+            body: JSON.stringify({
+                idEtudiants: students101
+            })
+        });
+
+        expect(res.status).toBe(400);
+        const data = await res.json();
+        expect(data.code).toBe("VALIDATION_ERROR");
+    });
 });

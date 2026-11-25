@@ -1,15 +1,9 @@
 import { z } from "zod";
 import { BadRequestError } from "../../shared/errors.js";
+import { idOrUuidSchema } from "../../shared/uuid.js";
 
-export const courseIdSchema = z.coerce
-    .number({ message: "L'identifiant du cours doit être un nombre" })
-    .int("L'identifiant du cours doit être un entier")
-    .positive("L'identifiant du cours doit être un entier strictement positif");
-
-export const moduleIdSchema = z.coerce
-    .number({ message: "L'identifiant du module doit être un nombre" })
-    .int("L'identifiant du module doit être un entier")
-    .positive("L'identifiant du module doit être un entier strictement positif");
+export const courseIdSchema = idOrUuidSchema;
+export const moduleIdSchema = idOrUuidSchema;
 
 export const courseIdParamSchema = z.object({
     id: courseIdSchema
@@ -97,6 +91,73 @@ export const updateCourseSchema = z.object({
         message: "Au moins un champ (titre ou description) doit être fourni"
     }
 );
+
+export const courseLevelEnum = z.enum(["starter", "intermediare", "advanced"]);
+export type CourseLevel = z.infer<typeof courseLevelEnum>;
+
+export const testCourseIdParamSchema = z
+    .object({
+        idCours: z
+            .string({ message: "L'identifiant du cours doit être un UUID valide" })
+            .uuid({ message: "L'identifiant du cours doit être un UUID valide" })
+            .optional(),
+        id: z
+            .string({ message: "L'identifiant du cours doit être un UUID valide" })
+            .uuid({ message: "L'identifiant du cours doit être un UUID valide" })
+            .optional()
+    })
+    .refine((data) => data.idCours !== undefined || data.id !== undefined, {
+        message: "L'identifiant du cours doit être un UUID valide"
+    });
+
+export const updateTestCourseSchema = z
+    .object({
+        title: z
+            .string({ message: "Le titre doit être une chaîne de caractères" })
+            .trim()
+            .min(1, "Le titre ne peut pas être vide")
+            .max(255, "Le titre ne peut pas dépasser 255 caractères")
+            .optional(),
+
+        description: z
+            .string({ message: "La description doit être une chaîne de caractères" })
+            .trim()
+            .optional(),
+
+        summary: z
+            .string({ message: "Le résumé doit être une chaîne de caractères" })
+            .trim()
+            .optional(),
+
+        level: z.preprocess((val) => {
+            if (typeof val === "string") {
+                const lower = val.trim().toLowerCase();
+                if (lower === "intermédiaire") return "intermediare";
+                return lower;
+            }
+            return val;
+        }, courseLevelEnum).optional()
+    })
+    .strict()
+    .superRefine((data, ctx) => {
+        const keys = Object.keys(data).filter(
+            (key) => data[key as keyof typeof data] !== undefined
+        );
+        if (keys.length < 1) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Au moins un champ doit être modifié"
+            });
+        }
+        if (keys.length > 3) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Au maximum 3 champs peuvent être modifiés"
+            });
+        }
+    });
+
+export type UpdateTestCourseInput = z.infer<typeof updateTestCourseSchema>;
 
 export const createModuleSchema = z.object({
     title: z.string({ message: "Le titre du module est obligatoire" })

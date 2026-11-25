@@ -21,7 +21,9 @@ import {
     createModuleSchema,
     moduleIdParamSchema,
     paginationSchema,
-    updateCourseSchema
+    testCourseIdParamSchema,
+    updateCourseSchema,
+    updateTestCourseSchema
 } from "./course.schema.js";
 import { courseController } from "./course.controller.js";
 
@@ -111,6 +113,15 @@ router.post(
     validateParams(courseIdOrIdCoursParamSchema),
     validateBody(bulkEnrollSchema),
     bulkEnroll
+);
+
+router.patch(
+    ["/test/courses/:idCours", "/test/courses/:id"],
+    authenticate,
+    authorize("ADMIN", "TEACHER"),
+    validateParams(testCourseIdParamSchema),
+    validateBody(updateTestCourseSchema),
+    courseController.updateTestCourse
 );
 
 router.post(

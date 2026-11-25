@@ -1,7 +1,9 @@
 import { Op } from "sequelize";
+import type { Transaction } from "sequelize";
 import { User } from "./user.model.js";
 import { LoginLog } from "../auth/login-log.model.js";
 import { RefreshToken } from "../auth/refresh-token.model.js";
+import { isUuid } from "../../shared/uuid.js";
 
 export interface FindAllUsersOptions {
     page: number;
@@ -11,16 +13,23 @@ export interface FindAllUsersOptions {
 }
 
 export class UserRepository {
-    findById(userId: number | string): ReturnType<typeof User.findByPk> {
-        if (typeof userId === "string" && userId.includes("-")) {
-            return User.findOne({ where: { uuid: userId } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    findById(userId: number | string, options?: { transaction?: Transaction; lock?: any }): ReturnType<typeof User.findByPk> {
+        if (isUuid(userId)) {
+            return User.findOne({ where: { uuid: userId }, ...options });
         }
-        return User.findByPk(userId);
+        return User.findByPk(userId, options);
     }
 
-    findByEmail(email: string): ReturnType<typeof User.findOne> {
+    findByUuid(uuid: string): ReturnType<typeof User.findOne> {
+        return User.findOne({ where: { uuid } });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    findByEmail(email: string, options?: { transaction?: Transaction; lock?: any }): ReturnType<typeof User.findOne> {
         return User.findOne({
-            where: { email }
+            where: { email },
+            ...options
         });
     }
 
@@ -63,12 +72,20 @@ export class UserRepository {
         };
     }
 
-    updateRole(userId: number, role: string): ReturnType<typeof User.update> {
-        return User.update({ role }, { where: { id: userId } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    findActiveAdmins(options?: { transaction?: Transaction; lock?: any }): ReturnType<typeof User.findAll> {
+        return User.findAll({
+            where: { role: "ADMIN", isActive: true },
+            ...options
+        });
     }
 
-    updateActive(userId: number, isActive: boolean): ReturnType<typeof User.update> {
-        return User.update({ isActive }, { where: { id: userId } });
+    updateRole(userId: number, role: string, options?: { transaction?: Transaction }): ReturnType<typeof User.update> {
+        return User.update({ role }, { where: { id: userId }, ...options });
+    }
+
+    updateActive(userId: number, isActive: boolean, options?: { transaction?: Transaction }): ReturnType<typeof User.update> {
+        return User.update({ isActive }, { where: { id: userId }, ...options });
     }
 
     findAllSessions(userId: number, now: Date): ReturnType<typeof RefreshToken.findAll> {

@@ -15,7 +15,8 @@ import type {
     CreateLessonInput,
     CreateModuleInput,
     PaginationInput,
-    UpdateCourseInput
+    UpdateCourseInput,
+    UpdateTestCourseInput
 } from "./course.schema.js";
 
 export type UserRole = "ADMIN" | "TEACHER" | "LEARNER";
@@ -105,7 +106,7 @@ export class CourseService {
     }
 
     async getCourseById(
-        courseId: number,
+        courseId: number | string,
         user?: UserContext | null
     ) {
         const course = await this.courseRepository.findById(courseId);
@@ -130,7 +131,7 @@ export class CourseService {
     }
 
     async updateCourse(
-        courseId: number,
+        courseId: number | string,
         data: UpdateCourseInput,
         user: UserContext
     ) {
@@ -154,8 +155,36 @@ export class CourseService {
         });
     }
 
+    async updateTestCourse(
+        courseUuid: string,
+        data: UpdateTestCourseInput,
+        user: UserContext
+    ) {
+        const course = await this.courseRepository.findByUuid(courseUuid);
+
+        if (!course) {
+            throw new NotFoundError("Cours introuvable");
+        }
+
+        const teacherId = course.get("teacherId") as number;
+
+        if (user.role !== "ADMIN" && teacherId !== user.userId) {
+            throw new ForbiddenError(
+                "Vous ne disposez pas de cette autorisation"
+            );
+        }
+
+        return this.courseRepository.update(course, {
+            status: "DRAFT",
+            ...(data.title !== undefined ? { title: data.title } : {}),
+            ...(data.description !== undefined ? { description: data.description } : {}),
+            ...(data.summary !== undefined ? { summary: data.summary } : {}),
+            ...(data.level !== undefined ? { level: data.level } : {})
+        });
+    }
+
     async deleteCourse(
-        courseId: number,
+        courseId: number | string,
         user: UserContext
     ): Promise<void> {
         const course = await this.courseRepository.findById(courseId);
@@ -180,7 +209,8 @@ export class CourseService {
             );
         }
 
-        const enrollmentsCount = await this.courseRepository.countEnrollments(courseId);
+        const internalCourseId = course.get("id") as number;
+        const enrollmentsCount = await this.courseRepository.countEnrollments(internalCourseId);
 
         if (enrollmentsCount > 0) {
             throw new ConflictError(
@@ -192,7 +222,7 @@ export class CourseService {
     }
 
     async publishCourse(
-        courseId: number,
+        courseId: number | string,
         user: UserContext
     ) {
         const course = await this.courseRepository.findById(courseId);
@@ -227,7 +257,7 @@ export class CourseService {
     }
 
     async addModule(
-        courseId: number,
+        courseId: number | string,
         data: CreateModuleInput,
         user: UserContext
     ) {
@@ -245,8 +275,10 @@ export class CourseService {
             );
         }
 
+        const internalCourseId = course.get("id") as number;
+
         return this.courseRepository.createModule({
-            courseId,
+            courseId: internalCourseId,
             title: data.title,
             ...(data.description !== undefined ? { description: data.description } : {}),
             ...(data.position !== undefined ? { position: data.position } : {})
@@ -254,7 +286,7 @@ export class CourseService {
     }
 
     async addLesson(
-        moduleId: number,
+        moduleId: number | string,
         data: CreateLessonInput,
         user: UserContext
     ) {
@@ -279,8 +311,10 @@ export class CourseService {
             );
         }
 
+        const internalModuleId = moduleItem.get("id") as number;
+
         return this.courseRepository.createLesson({
-            moduleId,
+            moduleId: internalModuleId,
             title: data.title,
             content: data.content,
             ...(data.position !== undefined ? { position: data.position } : {})

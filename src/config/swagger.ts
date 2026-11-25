@@ -37,7 +37,122 @@ export const swaggerDocument: OpenAPIV3.Document = {
             }
         },
 
+        parameters: {
+            UserIdParam: {
+                name: "id",
+                in: "path",
+                required: true,
+                description: "Identifiant public de l'utilisateur (entier strictement positif ou UUID v4 valide)",
+                schema: {
+                    oneOf: [
+                        { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                        { type: "string", format: "uuid", example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", description: "Identifiant UUID v4" }
+                    ]
+                }
+            },
+            CourseIdParam: {
+                name: "id",
+                in: "path",
+                required: true,
+                description: "Identifiant public du cours (entier strictement positif ou UUID v4 valide)",
+                schema: {
+                    oneOf: [
+                        { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                        { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                    ]
+                }
+            },
+            ModuleIdParam: {
+                name: "moduleId",
+                in: "path",
+                required: true,
+                description: "Identifiant public du module (entier strictement positif ou UUID v4 valide)",
+                schema: {
+                    oneOf: [
+                        { type: "integer", minimum: 1, example: 5, description: "Identifiant numérique (ID)" },
+                        { type: "string", format: "uuid", example: "3fa85f64-5717-4562-b3fc-2c963f66afa6", description: "Identifiant UUID v4" }
+                    ]
+                }
+            },
+            EnrollmentIdParam: {
+                name: "enrollmentId",
+                in: "path",
+                required: true,
+                description: "Identifiant public de l'inscription (entier strictement positif ou UUID v4 valide)",
+                schema: {
+                    oneOf: [
+                        { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                        { type: "string", format: "uuid", example: "7c9e6679-7425-40de-944b-e07fc1f90ae7", description: "Identifiant UUID v4" }
+                    ]
+                }
+            },
+            LessonIdParam: {
+                name: "lessonId",
+                in: "path",
+                required: true,
+                description: "Identifiant public de la leçon (entier strictement positif ou UUID v4 valide)",
+                schema: {
+                    oneOf: [
+                        { type: "integer", minimum: 1, example: 10, description: "Identifiant numérique (ID)" },
+                        { type: "string", format: "uuid", example: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", description: "Identifiant UUID v4" }
+                    ]
+                }
+            }
+        },
+
+        responses: {
+            BadRequest: {
+                description: "Données invalides ou identifiant mal formé (doit être un entier strictement positif ou un UUID valide)",
+                content: {
+                    "application/json": {
+                        schema: { $ref: "#/components/schemas/ApiError" }
+                    }
+                }
+            },
+            NotFound: {
+                description: "Ressource introuvable (identifiant valide mais inexistant)",
+                content: {
+                    "application/json": {
+                        schema: { $ref: "#/components/schemas/ApiError" }
+                    }
+                }
+            },
+            Unauthorized: {
+                description: "Non authentifié (token manquant, invalide ou expiré)",
+                content: {
+                    "application/json": {
+                        schema: { $ref: "#/components/schemas/ApiError" }
+                    }
+                }
+            },
+            Forbidden: {
+                description: "Accès interdit (droits ou rôle insuffisants)",
+                content: {
+                    "application/json": {
+                        schema: { $ref: "#/components/schemas/ApiError" }
+                    }
+                }
+            }
+        },
+
         schemas: {
+            IdOrUuid: {
+                description: "Identifiant public d'une ressource : accepte un entier strictement positif ou un UUID v4 valide",
+                oneOf: [
+                    {
+                        type: "integer",
+                        minimum: 1,
+                        example: 1,
+                        description: "Identifiant numérique auto-incrémenté (ID)"
+                    },
+                    {
+                        type: "string",
+                        format: "uuid",
+                        example: "550e8400-e29b-41d4-a716-446655440000",
+                        description: "Identifiant unique universel (UUID v4)"
+                    }
+                ]
+            },
             Register: {
                 type: "object",
                 required: ["firstName", "lastName", "email", "password", "confirmPassword"],
@@ -83,8 +198,20 @@ export const swaggerDocument: OpenAPIV3.Document = {
                 required: ["title"],
                 properties: {
                     title: { type: "string", maxLength: 255, example: "Les fondamentaux" },
-                    description: { type: "string" },
+                    description: { type: "string", example: "Description du module" },
                     position: { type: "integer", minimum: 1, example: 1 }
+                }
+            },
+
+            Module: {
+                type: "object",
+                properties: {
+                    id: { type: "integer", example: 1, description: "Identifiant numérique (clé primaire interne)" },
+                    uuid: { type: "string", format: "uuid", example: "3fa85f64-5717-4562-b3fc-2c963f66afa6", description: "Identifiant UUID public du module" },
+                    courseId: { type: "integer", example: 42, description: "Identifiant numérique du cours associé (clé étrangère interne)" },
+                    title: { type: "string", example: "Les fondamentaux" },
+                    description: { type: "string", nullable: true, example: "Description du module" },
+                    position: { type: "integer", example: 1 }
                 }
             },
 
@@ -103,10 +230,11 @@ export const swaggerDocument: OpenAPIV3.Document = {
                 required: ["learnerId"],
                 properties: {
                     learnerId: {
-                        type: "integer",
-                        minimum: 1,
-                        example: 12,
-                        description: "Identifiant de l'apprenant à inscrire"
+                        description: "Identifiant de l'apprenant à inscrire (entier strictement positif ou UUID v4 valide)",
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 12, description: "Identifiant numérique" },
+                            { type: "string", format: "uuid", example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", description: "Identifiant UUID v4" }
+                        ]
                     }
                 }
             },
@@ -114,12 +242,61 @@ export const swaggerDocument: OpenAPIV3.Document = {
             Course: {
                 type: "object",
                 properties: {
-                    id: { type: "integer", example: 1 },
-                    teacherId: { type: "integer", example: 1 },
+                    id: { type: "integer", example: 1, description: "Identifiant numérique (clé primaire interne)" },
+                    uuid: { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID public du cours" },
+                    teacherId: { type: "integer", example: 1, description: "Identifiant numérique de l'enseignant (clé étrangère interne)" },
                     title: { type: "string", example: "Cours de test 1" },
                     description: { type: "string", example: "Description du cours de test 1" },
                     status: { type: "string", example: "DRAFT" },
                     category: { type: "string", enum: ["Dev", "Data", "other"], example: "other" }
+                }
+            },
+
+            Enrollment: {
+                type: "object",
+                properties: {
+                    id: { type: "integer", example: 1, description: "Identifiant numérique (clé primaire interne)" },
+                    uuid: { type: "string", format: "uuid", example: "7c9e6679-7425-40de-944b-e07fc1f90ae7", description: "Identifiant UUID public de l'inscription" },
+                    courseId: { type: "integer", example: 42, description: "Identifiant numérique du cours associé (clé étrangère interne)" },
+                    learnerId: { type: "integer", example: 10, description: "Identifiant numérique de l'apprenant (clé étrangère interne)" },
+                    enrolledAt: { type: "string", format: "date-time" }
+                }
+            },
+
+            Lesson: {
+                type: "object",
+                properties: {
+                    id: { type: "integer", example: 1, description: "Identifiant numérique (clé primaire interne)" },
+                    uuid: { type: "string", format: "uuid", example: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", description: "Identifiant UUID public de la leçon" },
+                    moduleId: { type: "integer", example: 5, description: "Identifiant numérique du module parent (clé étrangère interne)" },
+                    title: { type: "string", example: "Introduction aux bases" },
+                    content: { type: "string", example: "Contenu de la leçon" },
+                    position: { type: "integer", example: 1 }
+                }
+            },
+
+            LessonProgress: {
+                type: "object",
+                properties: {
+                    id: { type: "integer", example: 1, description: "Identifiant numérique de l'enregistrement de progression" },
+                    enrollmentId: { type: "integer", example: 1, description: "Identifiant numérique de l'inscription (clé étrangère interne)" },
+                    lessonId: { type: "integer", example: 10, description: "Identifiant numérique de la leçon (clé étrangère interne)" },
+                    isCompleted: { type: "boolean", example: true },
+                    completedAt: { type: "string", format: "date-time", nullable: true },
+                    createdAt: { type: "string", format: "date-time" },
+                    updatedAt: { type: "string", format: "date-time" }
+                }
+            },
+
+            UpdateProgressInput: {
+                type: "object",
+                required: ["isCompleted"],
+                properties: {
+                    isCompleted: {
+                        type: "boolean",
+                        example: true,
+                        description: "true pour terminer la leçon, false pour réinitialiser sa progression"
+                    }
                 }
             },
 
@@ -147,25 +324,32 @@ export const swaggerDocument: OpenAPIV3.Document = {
                 required: ["idCourse", "idEtudiants"],
                 properties: {
                     idCourse: {
+                        description: "Identifiant du cours (entier strictement positif ou UUID v4 valide)",
                         oneOf: [
-                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000" },
-                            { type: "integer", minimum: 1, example: 42 }
-                        ],
-                        description: "Identifiant du cours (UUID ou entier)"
+                            { type: "integer", minimum: 1, example: 42, description: "Identifiant numérique" },
+                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                        ]
+                    },
+                    idCours: {
+                        description: "Alias pour l'identifiant du cours (entier strictement positif ou UUID v4 valide)",
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 42, description: "Identifiant numérique" },
+                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                        ]
                     },
                     idEtudiants: {
                         type: "array",
                         items: {
                             oneOf: [
-                                { type: "string", format: "uuid", example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11" },
-                                { type: "integer", minimum: 1, example: 3 }
+                                { type: "integer", minimum: 1, example: 3, description: "Identifiant numérique" },
+                                { type: "string", format: "uuid", example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", description: "Identifiant UUID v4" }
                             ]
                         },
                         example: [
                             "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
                             "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22"
                         ],
-                        description: "Identifiants des apprenants à inscrire (UUID ou entiers)"
+                        description: "Identifiants des apprenants à inscrire (entiers strictement positifs ou UUID valides)"
                     }
                 }
             },
@@ -200,8 +384,8 @@ export const swaggerDocument: OpenAPIV3.Document = {
             User: {
                 type: "object",
                 properties: {
-                    id: { type: "integer", example: 1 },
-                    uuid: { type: "string", format: "uuid", nullable: true },
+                    id: { type: "integer", example: 1, description: "Identifiant numérique (clé primaire interne)" },
+                    uuid: { type: "string", format: "uuid", example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", description: "Identifiant UUID public de l'utilisateur" },
                     firstName: { type: "string", example: "Mamadou" },
                     lastName: { type: "string", example: "Seck" },
                     email: { type: "string", format: "email", example: "mamadou@example.com" },
@@ -1015,12 +1199,19 @@ export const swaggerDocument: OpenAPIV3.Document = {
             get: {
                 tags: ["Users administration"],
                 summary: "Affiche un utilisateur",
+                description: "Récupère les détails d'un utilisateur par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
-                    schema: { type: "integer", minimum: 1 }
+                    description: "Identifiant public de l'utilisateur (entier strictement positif ou UUID v4 valide)",
+                    schema: {
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 responses: {
                     "200": {
@@ -1036,9 +1227,24 @@ export const swaggerDocument: OpenAPIV3.Document = {
                             }
                         }
                     },
+                    "400": {
+                        description: "Identifiant invalide : doit être un entier strictement positif ou un UUID valide",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Rôle ADMIN requis" },
-                    "404": { description: "Utilisateur introuvable" }
+                    "404": {
+                        description: "Utilisateur introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -1047,12 +1253,19 @@ export const swaggerDocument: OpenAPIV3.Document = {
             patch: {
                 tags: ["Users administration"],
                 summary: "Modifie le rôle et révoque les sessions",
+                description: "Met à jour le rôle d'un utilisateur désigné par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
-                    schema: { type: "integer", minimum: 1 }
+                    description: "Identifiant public de l'utilisateur (entier strictement positif ou UUID v4 valide)",
+                    schema: {
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 requestBody: {
                     required: true,
@@ -1064,9 +1277,24 @@ export const swaggerDocument: OpenAPIV3.Document = {
                 },
                 responses: {
                     "200": { description: "Rôle mis à jour" },
+                    "400": {
+                        description: "Données invalides ou identifiant mal formé",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Rôle ADMIN requis" },
-                    "404": { description: "Utilisateur introuvable" }
+                    "404": {
+                        description: "Utilisateur introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -1075,12 +1303,19 @@ export const swaggerDocument: OpenAPIV3.Document = {
             patch: {
                 tags: ["Users administration"],
                 summary: "Active ou désactive un compte",
+                description: "Active ou désactive le compte d'un utilisateur désigné par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
-                    schema: { type: "integer", minimum: 1 }
+                    description: "Identifiant public de l'utilisateur (entier strictement positif ou UUID v4 valide)",
+                    schema: {
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 requestBody: {
                     required: true,
@@ -1092,9 +1327,24 @@ export const swaggerDocument: OpenAPIV3.Document = {
                 },
                 responses: {
                     "200": { description: "Statut mis à jour" },
+                    "400": {
+                        description: "Données invalides ou identifiant mal formé",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Rôle ADMIN requis" },
-                    "404": { description: "Utilisateur introuvable" }
+                    "404": {
+                        description: "Utilisateur introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -1103,18 +1353,40 @@ export const swaggerDocument: OpenAPIV3.Document = {
             post: {
                 tags: ["Users administration"],
                 summary: "Révoque toutes les sessions d'un utilisateur",
+                description: "Révoque toutes les sessions d'un utilisateur désigné par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
-                    schema: { type: "integer", minimum: 1 }
+                    description: "Identifiant public de l'utilisateur (entier strictement positif ou UUID v4 valide)",
+                    schema: {
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 responses: {
                     "200": { description: "Sessions révoquées" },
+                    "400": {
+                        description: "Identifiant invalide : doit être un entier strictement positif ou un UUID valide",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Rôle ADMIN requis" },
-                    "404": { description: "Utilisateur introuvable" }
+                    "404": {
+                        description: "Utilisateur introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -1123,18 +1395,40 @@ export const swaggerDocument: OpenAPIV3.Document = {
             get: {
                 tags: ["Users administration"],
                 summary: "Liste les derniers événements d'authentification",
+                description: "Consulte le journal des événements de sécurité d'un utilisateur désigné par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
-                    schema: { type: "integer", minimum: 1 }
+                    description: "Identifiant public de l'utilisateur (entier strictement positif ou UUID v4 valide)",
+                    schema: {
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 responses: {
                     "200": { description: "Liste des événements" },
+                    "400": {
+                        description: "Identifiant invalide : doit être un entier strictement positif ou un UUID valide",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Rôle ADMIN requis" },
-                    "404": { description: "Utilisateur introuvable" }
+                    "404": {
+                        description: "Utilisateur introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -1254,10 +1548,24 @@ export const swaggerDocument: OpenAPIV3.Document = {
                     }
                 },
                 responses: {
-                    "201": { description: "Cours créé" },
+                    "201": {
+                        description: "Cours créé",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/Course" }
+                            }
+                        }
+                    },
+                    "400": {
+                        description: "Données invalides",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
-                    "403": { description: "Rôle insuffisant" },
-                    "400": { description: "Données invalides" }
+                    "403": { description: "Rôle insuffisant" }
                 }
             }
         },
@@ -1324,12 +1632,13 @@ export const swaggerDocument: OpenAPIV3.Document = {
                     name: "id",
                     in: "path",
                     required: true,
+                    description: "Identifiant du cours (entier strictement positif ou UUID v4 valide)",
                     schema: {
-                        type: "string",
-                        format: "uuid",
-                        example: "550e8400-e29b-41d4-a716-446655440000"
-                    },
-                    description: "Identifiant du cours (UUID ou entier)"
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 42, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 requestBody: {
                     required: true,
@@ -1348,9 +1657,62 @@ export const swaggerDocument: OpenAPIV3.Document = {
                             }
                         }
                     },
-                    "400": { description: "Données invalides ou cours non publié" },
+                    "400": {
+                        description: "Données invalides, identifiant mal formé ou cours non publié",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Accès interdit" },
+                    "404": {
+                        description: "Cours introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+
+        "/api/test/courses/{idCours}": {
+            patch: {
+                tags: ["Cours"],
+                summary: "Modifier partiellement un cours (test)",
+                description: "Permet au professeur propriétaire ou à l'administrateur de modifier partiellement un cours (1 à 3 champs parmi title, description, summary, level). Le cours passe automatiquement en brouillon (DRAFT).",
+                security: [{ bearerAuth: [] }],
+                parameters: [{
+                    name: "idCours",
+                    in: "path",
+                    required: true,
+                    description: "Identifiant UUID du cours",
+                    schema: { type: "string", format: "uuid" }
+                }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                type: "object",
+                                properties: {
+                                    title: { type: "string", minLength: 1, maxLength: 255 },
+                                    description: { type: "string" },
+                                    summary: { type: "string" },
+                                    level: { type: "string", enum: ["starter", "intermediare", "advanced"] }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    "200": { description: "Cours modifié avec succès, passé en DRAFT" },
+                    "400": { description: "UUID invalide, nombre de champs incorrect (<1 ou >3), champ non autorisé ou niveau invalide" },
+                    "401": { description: "Non authentifié" },
+                    "403": { description: "Non autorisé (professeur ne possédant pas le cours ou rôle non autorisé)" },
                     "404": { description: "Cours introuvable" }
                 }
             }
@@ -1360,27 +1722,63 @@ export const swaggerDocument: OpenAPIV3.Document = {
             get: {
                 tags: ["Cours"],
                 summary: "Consulter un cours",
+                description: "Récupère les détails d'un cours par son identifiant numérique ou son UUID.",
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
-                    schema: { type: "integer", minimum: 1 }
+                    description: "Identifiant public du cours (entier strictement positif ou UUID v4 valide)",
+                    schema: {
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 responses: {
-                    "200": { description: "Détails du cours" },
-                    "404": { description: "Cours introuvable" }
+                    "200": {
+                        description: "Détails du cours",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/Course" }
+                            }
+                        }
+                    },
+                    "400": {
+                        description: "Identifiant invalide : doit être un entier strictement positif ou un UUID valide",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
+                    "404": {
+                        description: "Cours introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
                 }
             },
 
             patch: {
                 tags: ["Cours"],
                 summary: "Modifier un cours",
+                description: "Met à jour un cours désigné par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
-                    schema: { type: "integer", minimum: 1 }
+                    description: "Identifiant public du cours (entier strictement positif ou UUID v4 valide)",
+                    schema: {
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 requestBody: {
                     required: true,
@@ -1391,30 +1789,72 @@ export const swaggerDocument: OpenAPIV3.Document = {
                     }
                 },
                 responses: {
-                    "200": { description: "Cours modifié" },
-                    "400": { description: "Données invalides" },
+                    "200": {
+                        description: "Cours modifié",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/Course" }
+                            }
+                        }
+                    },
+                    "400": {
+                        description: "Données invalides ou identifiant mal formé",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Accès interdit" },
-                    "404": { description: "Cours introuvable" }
+                    "404": {
+                        description: "Cours introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
                 }
             },
 
             delete: {
                 tags: ["Cours"],
                 summary: "Supprimer un cours brouillon",
+                description: "Supprime un cours brouillon désigné par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
-                    schema: { type: "integer", minimum: 1 }
+                    description: "Identifiant public du cours (entier strictement positif ou UUID v4 valide)",
+                    schema: {
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 responses: {
                     "204": { description: "Cours supprimé" },
-                    "400": { description: "Le cours ne peut pas être supprimé" },
+                    "400": {
+                        description: "Le cours ne peut pas être supprimé ou identifiant mal formé",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Accès interdit" },
-                    "404": { description: "Cours introuvable" }
+                    "404": {
+                        description: "Cours introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -1423,18 +1863,47 @@ export const swaggerDocument: OpenAPIV3.Document = {
             post: {
                 tags: ["Cours"],
                 summary: "Publier un cours",
+                description: "Publie un cours désigné par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
-                    schema: { type: "integer", minimum: 1 }
+                    description: "Identifiant public du cours (entier strictement positif ou UUID v4 valide)",
+                    schema: {
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 responses: {
-                    "200": { description: "Cours publié" },
+                    "200": {
+                        description: "Cours publié",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/Course" }
+                            }
+                        }
+                    },
+                    "400": {
+                        description: "Identifiant invalide : doit être un entier strictement positif ou un UUID valide",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Accès interdit" },
-                    "404": { description: "Cours introuvable" }
+                    "404": {
+                        description: "Cours introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -1443,43 +1912,68 @@ export const swaggerDocument: OpenAPIV3.Document = {
             get: {
                 tags: ["Cours"],
                 summary: "Consulter les apprenants inscrits à un cours",
-                description: "Permet à un enseignant de consulter les inscriptions à son cours. Un administrateur peut également consulter les inscriptions.",
+                description: "Permet à un enseignant ou à un administrateur de consulter les inscriptions à son cours désigné par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
+                    description: "Identifiant public du cours (entier strictement positif ou UUID v4 valide)",
                     schema: {
-                        type: "string",
-                        format: "uuid",
-                        example: "550e8400-e29b-41d4-a716-446655440000"
-                    },
-                    description: "Identifiant du cours (UUID ou entier)"
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 responses: {
                     "200": {
-                        description: "Liste des apprenants inscrits. Retourne un tableau vide si aucune inscription n'existe."
+                        description: "Liste des apprenants inscrits. Retourne un tableau vide si aucune inscription n'existe.",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "array",
+                                    items: { $ref: "#/components/schemas/Enrollment" }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        description: "Identifiant invalide : doit être un entier strictement positif ou un UUID valide",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
                     },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Accès interdit : cours appartenant à un autre enseignant" },
-                    "404": { description: "Cours introuvable" }
+                    "404": {
+                        description: "Cours introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
                 }
             },
             post: {
                 tags: ["Cours"],
                 summary: "Inscrire un apprenant à un cours",
-                description: "Permet à un enseignant d'inscrire un apprenant à son cours publié. Un administrateur peut également effectuer cette opération.",
+                description: "Permet à un enseignant ou à un administrateur d'inscrire un apprenant à son cours publié désigné par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
+                    description: "Identifiant public du cours (entier strictement positif ou UUID v4 valide)",
                     schema: {
-                        type: "string",
-                        format: "uuid",
-                        example: "550e8400-e29b-41d4-a716-446655440000"
-                    },
-                    description: "Identifiant du cours (UUID ou entier)"
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 requestBody: {
                     required: true,
@@ -1492,11 +1986,32 @@ export const swaggerDocument: OpenAPIV3.Document = {
                     }
                 },
                 responses: {
-                    "201": { description: "Apprenant inscrit avec succès" },
-                    "400": { description: "Données invalides ou cours non publié" },
+                    "201": {
+                        description: "Apprenant inscrit avec succès",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/Enrollment" }
+                            }
+                        }
+                    },
+                    "400": {
+                        description: "Données invalides, identifiant mal formé ou cours non publié",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Accès interdit : cours appartenant à un autre enseignant" },
-                    "404": { description: "Cours ou apprenant introuvable" },
+                    "404": {
+                        description: "Cours ou apprenant introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "409": { description: "Cet apprenant est déjà inscrit à ce cours" }
                 }
             }
@@ -1506,25 +2021,36 @@ export const swaggerDocument: OpenAPIV3.Document = {
             post: {
                 tags: ["Cours"],
                 summary: "S'inscrire soi-même à un cours",
-                description: "Permet à un apprenant authentifié de s'inscrire lui-même à un cours publié. L'identifiant de l'apprenant est récupéré automatiquement depuis son token JWT. Aucun corps de requête n'est nécessaire.",
+                description: "Permet à un apprenant authentifié de s'inscrire lui-même à un cours publié désigné par son identifiant numérique ou son UUID. L'identifiant de l'apprenant est récupéré automatiquement depuis son token JWT. Aucun corps de requête n'est nécessaire.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
+                    description: "Identifiant public du cours (entier strictement positif ou UUID v4 valide)",
                     schema: {
-                        type: "string",
-                        format: "uuid",
-                        example: "550e8400-e29b-41d4-a716-446655440000"
-                    },
-                    description: "Identifiant du cours (UUID ou entier)"
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 responses: {
                     "201": {
-                        description: "Inscription effectuée avec succès"
+                        description: "Inscription effectuée avec succès",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/Enrollment" }
+                            }
+                        }
                     },
                     "400": {
-                        description: "Le cours n'est pas publié"
+                        description: "Le cours n'est pas publié ou identifiant invalide (mal formé)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
                     },
                     "401": {
                         description: "Non authentifié"
@@ -1533,7 +2059,12 @@ export const swaggerDocument: OpenAPIV3.Document = {
                         description: "Accès interdit : seuls les apprenants peuvent s'inscrire eux-mêmes"
                     },
                     "404": {
-                        description: "Cours introuvable"
+                        description: "Cours introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
                     },
                     "409": {
                         description: "Vous êtes déjà inscrit à ce cours"
@@ -1546,12 +2077,19 @@ export const swaggerDocument: OpenAPIV3.Document = {
             post: {
                 tags: ["Cours"],
                 summary: "Ajouter un module à un cours",
+                description: "Ajoute un module pédagogique à un cours désigné par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "id",
                     in: "path",
                     required: true,
-                    schema: { type: "integer", minimum: 1 }
+                    description: "Identifiant public du cours (entier strictement positif ou UUID v4 valide)",
+                    schema: {
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 requestBody: {
                     required: true,
@@ -1562,11 +2100,32 @@ export const swaggerDocument: OpenAPIV3.Document = {
                     }
                 },
                 responses: {
-                    "201": { description: "Module créé" },
-                    "400": { description: "Données invalides" },
+                    "201": {
+                        description: "Module créé",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/Module" }
+                            }
+                        }
+                    },
+                    "400": {
+                        description: "Données invalides ou identifiant de cours mal formé",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Accès interdit" },
-                    "404": { description: "Cours introuvable" }
+                    "404": {
+                        description: "Cours introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -1575,12 +2134,19 @@ export const swaggerDocument: OpenAPIV3.Document = {
             post: {
                 tags: ["Cours"],
                 summary: "Ajouter une leçon à un module",
+                description: "Ajoute une leçon à un module désigné par son identifiant numérique ou son UUID.",
                 security: [{ bearerAuth: [] }],
                 parameters: [{
                     name: "moduleId",
                     in: "path",
                     required: true,
-                    schema: { type: "integer", minimum: 1 }
+                    description: "Identifiant public du module (entier strictement positif ou UUID v4 valide)",
+                    schema: {
+                        oneOf: [
+                            { type: "integer", minimum: 1, example: 5, description: "Identifiant numérique (ID)" },
+                            { type: "string", format: "uuid", example: "3fa85f64-5717-4562-b3fc-2c963f66afa6", description: "Identifiant UUID v4" }
+                        ]
+                    }
                 }],
                 requestBody: {
                     required: true,
@@ -1591,11 +2157,110 @@ export const swaggerDocument: OpenAPIV3.Document = {
                     }
                 },
                 responses: {
-                    "201": { description: "Leçon créée" },
-                    "400": { description: "Données invalides" },
+                    "201": {
+                        description: "Leçon créée",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/Lesson" }
+                            }
+                        }
+                    },
+                    "400": {
+                        description: "Données invalides ou identifiant de module mal formé",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
                     "401": { description: "Non authentifié" },
                     "403": { description: "Accès interdit" },
-                    "404": { description: "Module introuvable" }
+                    "404": {
+                        description: "Module introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+
+        "/api/students/prof/{idProf}": {
+            get: {
+                tags: ["Inscriptions"],
+                summary: "Lister les apprenants d'un professeur donné",
+                description: "Permet au professeur concerné de consulter la liste paginée de tous les apprenants inscrits à ses cours, avec le nombre de cours suivis par apprenant.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "idProf",
+                        in: "path",
+                        required: true,
+                        description: "Identifiant du professeur (ID numérique ou UUID)",
+                        schema: {
+                            oneOf: [
+                                { type: "integer", minimum: 1 },
+                                { type: "string", format: "uuid" }
+                            ]
+                        }
+                    },
+                    {
+                        name: "page",
+                        in: "query",
+                        required: false,
+                        schema: { type: "integer", minimum: 1, default: 1 }
+                    },
+                    {
+                        name: "limit",
+                        in: "query",
+                        required: false,
+                        schema: { type: "integer", minimum: 1, maximum: 100, default: 10 }
+                    }
+                ],
+                responses: {
+                    "200": {
+                        description: "Liste paginée des apprenants avec le nombre de cours suivis",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "object",
+                                    properties: {
+                                        teacherId: { type: "integer", example: 3 },
+                                        teacherCourseCount: { type: "integer", example: 13, description: "Nombre total de cours du professeur" },
+                                        data: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    id: { type: "integer" },
+                                                    uuid: { type: "string", format: "uuid" },
+                                                    firstName: { type: "string" },
+                                                    lastName: { type: "string" },
+                                                    email: { type: "string" },
+                                                    teacherId: { type: "integer" },
+                                                    courseCount: { type: "integer", description: "Nombre de cours de ce prof suivis par l'apprenant" }
+                                                }
+                                            }
+                                        },
+                                        pagination: {
+                                            type: "object",
+                                            properties: {
+                                                page: { type: "integer" },
+                                                limit: { type: "integer" },
+                                                total: { type: "integer" },
+                                                totalPages: { type: "integer" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": { description: "Non authentifié" },
+                    "403": { description: "Accès refusé (seul le professeur concerné peut accéder à ses apprenants)" },
+                    "404": { description: "Professeur introuvable" }
                 }
             }
         },
@@ -1608,13 +2273,98 @@ export const swaggerDocument: OpenAPIV3.Document = {
                 security: [{ bearerAuth: [] }],
                 responses: {
                     "200": {
-                        description: "Liste des inscriptions de l'apprenant"
+                        description: "Liste des inscriptions de l'apprenant",
+                        content: {
+                            "application/json": {
+                                schema: {
+                                    type: "array",
+                                    items: { $ref: "#/components/schemas/Enrollment" }
+                                }
+                            }
+                        }
                     },
                     "401": {
                         description: "Non authentifié"
                     },
                     "403": {
                         description: "Accès interdit : seuls les apprenants peuvent consulter leurs inscriptions"
+                    }
+                }
+            }
+        },
+
+        "/api/enrollments/{enrollmentId}/lessons/{lessonId}/progress": {
+            put: {
+                tags: ["Inscriptions"],
+                summary: "Mettre à jour la progression d'une leçon",
+                description: "Permet à un apprenant authentifié de marquer une leçon comme terminée ou de réinitialiser sa progression. Si la leçon est déjà terminée, une nouvelle requête avec isCompleted=true conserve la date initiale de complétion. Accepte un identifiant numérique ou un UUID valide pour l'inscription et pour la leçon.",
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    {
+                        name: "enrollmentId",
+                        in: "path",
+                        required: true,
+                        description: "Identifiant public de l'inscription (entier strictement positif ou UUID v4 valide)",
+                        schema: {
+                            oneOf: [
+                                { type: "integer", minimum: 1, example: 1, description: "Identifiant numérique (ID)" },
+                                { type: "string", format: "uuid", example: "7c9e6679-7425-40de-944b-e07fc1f90ae7", description: "Identifiant UUID v4" }
+                            ]
+                        }
+                    },
+                    {
+                        name: "lessonId",
+                        in: "path",
+                        required: true,
+                        description: "Identifiant public de la leçon (entier strictement positif ou UUID v4 valide)",
+                        schema: {
+                            oneOf: [
+                                { type: "integer", minimum: 1, example: 10, description: "Identifiant numérique (ID)" },
+                                { type: "string", format: "uuid", example: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", description: "Identifiant UUID v4" }
+                            ]
+                        }
+                    }
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        "application/json": {
+                            schema: {
+                                $ref: "#/components/schemas/UpdateProgressInput"
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    "200": {
+                        description: "Progression mise à jour",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/LessonProgress" }
+                            }
+                        }
+                    },
+                    "400": {
+                        description: "Données invalides, identifiant mal formé ou leçon ne faisant pas partie du cours",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
+                    },
+                    "401": {
+                        description: "Non authentifié"
+                    },
+                    "403": {
+                        description: "Accès interdit : seuls les apprenants peuvent modifier leur propre progression"
+                    },
+                    "404": {
+                        description: "Inscription ou leçon introuvable (identifiant valide mais inexistant)",
+                        content: {
+                            "application/json": {
+                                schema: { $ref: "#/components/schemas/ApiError" }
+                            }
+                        }
                     }
                 }
             }

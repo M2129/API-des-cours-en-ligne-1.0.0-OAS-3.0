@@ -4,6 +4,7 @@ import {
     ConflictError,
     BadRequestError
 } from "../../shared/errors.js";
+import { isUuid } from "../../shared/uuid.js";
 import { UserService } from "./user.service.js";
 
 const userService = new UserService();
@@ -70,9 +71,18 @@ export const createUser = async (req: Request, res: Response) => {
     }
 };
 
+function extractId(req: Request, key = "id"): number | string {
+    const validated = (req.validated?.params as Record<string, unknown> | undefined)?.[key];
+    const raw = (validated ?? req.params[key]) as number | string;
+    if (typeof raw === "string" && !isUuid(raw) && /^[1-9]\d*$/.test(raw)) {
+        return Number(raw);
+    }
+    return raw;
+}
+
 export const getUser = async (req: Request, res: Response) => {
     try {
-        const { id } = req.validated?.params as { id: number };
+        const id = extractId(req, "id");
         const user = await userService.getUser(id);
         return res.status(200).json({ user });
     } catch (error) {
@@ -82,8 +92,8 @@ export const getUser = async (req: Request, res: Response) => {
 
 export const updateRole = async (req: Request, res: Response) => {
     try {
-        const { id } = req.validated?.params as { id: number };
-        const { role } = req.validated?.body as { role: "ADMIN" | "TEACHER" | "LEARNER" };
+        const id = extractId(req, "id");
+        const { role } = (req.validated?.body ?? req.body) as { role: "ADMIN" | "TEACHER" | "LEARNER" };
         const user = await userService.updateRole(id, role);
         return res.status(200).json({ message: "Rôle mis à jour", user });
     } catch (error) {
@@ -93,8 +103,8 @@ export const updateRole = async (req: Request, res: Response) => {
 
 export const updateActive = async (req: Request, res: Response) => {
     try {
-        const { id } = req.validated?.params as { id: number };
-        const { isActive } = req.validated?.body as { isActive: boolean };
+        const id = extractId(req, "id");
+        const { isActive } = (req.validated?.body ?? req.body) as { isActive: boolean };
         const user = await userService.updateActive(id, isActive);
         return res.status(200).json({ message: "Statut du compte mis à jour", user });
     } catch (error) {
@@ -104,7 +114,7 @@ export const updateActive = async (req: Request, res: Response) => {
 
 export const revokeSessions = async (req: Request, res: Response) => {
     try {
-        const { id } = req.validated?.params as { id: number };
+        const id = extractId(req, "id");
         const result = await userService.revokeSessions(id);
         return res.status(200).json({ message: "Sessions révoquées", ...result });
     } catch (error) {
@@ -114,7 +124,7 @@ export const revokeSessions = async (req: Request, res: Response) => {
 
 export const getSecurityEvents = async (req: Request, res: Response) => {
     try {
-        const { id } = req.validated?.params as { id: number };
+        const id = extractId(req, "id");
         const events = await userService.getSecurityEvents(id);
         return res.status(200).json({ events });
     } catch (error) {

@@ -87,7 +87,11 @@ describe("AuthService - register", () => {
         userRepository.findByEmail.mockResolvedValue(null);
         mocks.hashPassword.mockResolvedValue("hashed-password-123");
         userRepository.create.mockResolvedValue({
-            get: vi.fn((key: string) => (key === "id" ? 42 : undefined))
+            get: vi.fn((key: string) => {
+                if (key === "id") return 42;
+                if (key === "uuid") return "11111111-1111-4111-8111-111111111111";
+                return undefined;
+            })
         });
 
         const result = await authService.register(registerInput);
@@ -108,6 +112,7 @@ describe("AuthService - register", () => {
 
         expect(result).toEqual({
             id: 42,
+            uuid: "11111111-1111-4111-8111-111111111111",
             firstName: "Mamadou",
             lastName: "Seck",
             email: "mamadou@example.com"
@@ -196,6 +201,7 @@ describe("AuthService - login", () => {
             get: vi.fn((key: string) => {
                 const data: Record<string, unknown> = {
                     id: 1,
+                    uuid: "22222222-2222-4222-8222-222222222222",
                     firstName: "Mamadou",
                     lastName: "Seck",
                     email: "mamadou@example.com",
@@ -258,6 +264,7 @@ describe("AuthService - login", () => {
             refreshToken: "raw-refresh-token-128",
             user: {
                 id: 1,
+                uuid: "22222222-2222-4222-8222-222222222222",
                 firstName: "Mamadou",
                 lastName: "Seck",
                 email: "mamadou@example.com",
@@ -312,6 +319,7 @@ describe("AuthService - login", () => {
             get: vi.fn((key: string) => {
                 const data: Record<string, unknown> = {
                     id: 1,
+                    uuid: "22222222-2222-4222-8222-222222222222",
                     firstName: "Mamadou",
                     lastName: "Seck",
                     email: "mamadou@example.com",
@@ -372,6 +380,7 @@ describe("AuthService - login", () => {
             get: vi.fn((key: string) => {
                 const data: Record<string, unknown> = {
                     id: 1,
+                    uuid: "22222222-2222-4222-8222-222222222222",
                     firstName: "Mamadou",
                     lastName: "Seck",
                     email: "mamadou@example.com",
@@ -401,6 +410,7 @@ describe("AuthService - login", () => {
             refreshToken: "raw-refresh-token-128",
             user: {
                 id: 1,
+                uuid: "22222222-2222-4222-8222-222222222222",
                 firstName: "Mamadou",
                 lastName: "Seck",
                 email: "mamadou@example.com",

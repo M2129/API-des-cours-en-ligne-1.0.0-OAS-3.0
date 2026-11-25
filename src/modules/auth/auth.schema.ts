@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+const isPasswordByteLengthValid = (val: string) => Buffer.byteLength(val, "utf8") <= 72;
+
+export const passwordSchema = z.string()
+    .min(8, "Le mot de passe doit contenir au moins 8 caractères")
+    .refine(isPasswordByteLengthValid, {
+        message: "Le mot de passe ne doit pas dépasser 72 octets"
+    });
+
+export const legacyCompatiblePasswordSchema = z.string()
+    .min(1, "Le mot de passe est obligatoire")
+    .max(1024, "Le mot de passe ne doit pas dépasser 1024 caractères");
+
 export const registerSchema = z.object({
     firstName: z.string()
         .min(2, "Le prénom doit contenir au moins 2 caractères"),
@@ -10,11 +22,9 @@ export const registerSchema = z.object({
     email: z.string()
         .email("Adresse email invalide"),
 
-    password: z.string()
-        .min(8, "Le mot de passe doit contenir au moins 8 caractères"),
+    password: passwordSchema,
 
-    confirmPassword: z.string()
-        .min(8, "La confirmation doit contenir au moins 8 caractères")
+    confirmPassword: passwordSchema
 
 }).refine((data) => data.password === data.confirmPassword, {
     message: "Les mots de passe ne correspondent pas",
@@ -26,8 +36,7 @@ export const loginSchema = z.object({
     email: z.string()
         .email("Adresse email invalide"),
 
-    password: z.string()
-        .min(1, "Le mot de passe est obligatoire")
+    password: legacyCompatiblePasswordSchema
 });
 
 
@@ -44,8 +53,7 @@ export const forgotPasswordSchema = z.object({
 export const resetPasswordSchema = z.object({
     token: z.string()
         .min(1, "Le token est obligatoire"),
-    newPassword: z.string()
-        .min(8, "Le mot de passe doit contenir au moins 8 caractères")
+    newPassword: passwordSchema
 });
 
 export const verifyEmailSchema = z.object({
@@ -64,9 +72,9 @@ export const updateProfileSchema = z.object({
 
 export const changePasswordSchema = z.object({
     currentPassword: z.string()
-        .min(1, "Le mot de passe actuel est obligatoire"),
-    newPassword: z.string()
-        .min(8, "Le nouveau mot de passe doit contenir au moins 8 caractères")
+        .min(1, "Le mot de passe actuel est obligatoire")
+        .max(1024, "Le mot de passe actuel ne doit pas dépasser 1024 caractères"),
+    newPassword: passwordSchema
 });
 
 export const changeEmailSchema = z.object({

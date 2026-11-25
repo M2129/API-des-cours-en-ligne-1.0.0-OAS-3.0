@@ -6,9 +6,11 @@ import {
     Module,
     User
 } from "../../database/models.js";
+import { isUuid } from "../../shared/uuid.js";
 
 export type CourseStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 export type CourseCategory = "Dev" | "Data" | "other";
+export type CourseLevel = "starter" | "intermediare" | "advanced";
 
 export type CreateCourseData = {
     teacherId: number;
@@ -23,6 +25,8 @@ export type UpdateCourseData = {
     description?: string | null | undefined;
     status?: CourseStatus | undefined;
     category?: CourseCategory | undefined;
+    summary?: string | null | undefined;
+    level?: CourseLevel | undefined;
 };
 
 export type CreateModuleData = {
@@ -86,7 +90,7 @@ export class CourseRepository {
             ]
         ];
 
-        if (typeof id === "string" && id.includes("-")) {
+        if (isUuid(id)) {
             return Course.findOne({
                 where: { uuid: id },
                 include,
@@ -95,6 +99,42 @@ export class CourseRepository {
         }
 
         return Course.findByPk(id, {
+            include,
+            order
+        });
+    }
+
+    findByUuid(uuid: string): ReturnType<typeof Course.findOne> {
+        const include = [
+            {
+                model: User,
+                as: "teacher",
+                attributes: ["id", "firstName", "lastName", "email"]
+            },
+            {
+                model: Module,
+                as: "modules",
+                include: [
+                    {
+                        model: Lesson,
+                        as: "lessons"
+                    }
+                ]
+            }
+        ];
+
+        const order: any = [
+            [{ model: Module, as: "modules" }, "position", "ASC"],
+            [
+                { model: Module, as: "modules" },
+                { model: Lesson, as: "lessons" },
+                "position",
+                "ASC"
+            ]
+        ];
+
+        return Course.findOne({
+            where: { uuid },
             include,
             order
         });
@@ -156,14 +196,44 @@ export class CourseRepository {
         await course.destroy();
     }
 
-    countEnrollments(courseId: number): Promise<number> {
+    countEnrollments(courseId: number | string): Promise<number> {
         return Enrollment.count({
             where: { courseId }
         });
     }
 
-    findModuleById(id: number): ReturnType<typeof Module.findByPk> {
+    countByTeacher(teacherId: number): Promise<number> {
+        return Course.count({
+            where: { teacherId }
+        });
+    }
+
+    findModuleById(id: number | string): ReturnType<typeof Module.findByPk> {
+        const include = [
+            {
+                model: Lesson,
+                as: "lessons"
+            }
+        ];
+        const order: any = [[{ model: Lesson, as: "lessons" }, "position", "ASC"]];
+
+        if (isUuid(id)) {
+            return Module.findOne({
+                where: { uuid: id },
+                include,
+                order
+            });
+        }
+
         return Module.findByPk(id, {
+            include,
+            order
+        });
+    }
+
+    findModuleByUuid(uuid: string): ReturnType<typeof Module.findOne> {
+        return Module.findOne({
+            where: { uuid },
             include: [
                 {
                     model: Lesson,
@@ -195,8 +265,15 @@ export class CourseRepository {
         });
     }
 
-    findLessonById(id: number): ReturnType<typeof Lesson.findByPk> {
+    findLessonById(id: number | string): ReturnType<typeof Lesson.findByPk> {
+        if (isUuid(id)) {
+            return Lesson.findOne({ where: { uuid: id } });
+        }
         return Lesson.findByPk(id);
+    }
+
+    findLessonByUuid(uuid: string): ReturnType<typeof Lesson.findOne> {
+        return Lesson.findOne({ where: { uuid } });
     }
 
     async getNextLessonPosition(moduleId: number): Promise<number> {
